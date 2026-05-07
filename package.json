@@ -1,0 +1,47 @@
+{
+  "name": "xjs-ml",
+  "version": "0.0.0",
+  "description": "library modules for javascript that bundled about simple machine-learning implementations.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/begyyal/xjs_ml"
+  },
+  "keywords": [
+    "javascript",
+    "typescript",
+    "machine learning"
+  ],
+  "scripts": {
+    "build": "rm -rdf ./build && tsc && tsc -p ./tsconfig.cjs.json",
+    "test": "tsx ./src/test/test.ts"
+  },
+  "author": "begyyal",
+  "license": "Apache-2.0",
+  "files": [
+    "build",
+    "!/build/**/test*"
+  ],
+  "main": "./build/esm/index.js",
+  "types": "./build/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./build/esm/index.ts",
+        "default": "./build/esm/index.js"
+      },
+      "require": {
+        "types": "./build/esm/index.ts",
+        "default": "./build/cjs/index.js"
+      },
+      "default": {
+        "types": "./build/esm/index.ts",
+        "default": "./build/esm/index.js"
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
