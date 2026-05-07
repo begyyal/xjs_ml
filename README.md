@@ -1,7 +1,8 @@
 [![npm][npm-badge]][npm-url]
 
 # Overview
-Library modules for javascript that bundled about simple machine-learning implementations.  
+library modules for javascript that bundle simple machine-learning implementations.  
+currently this supports for modified KNN and naive bayes classifier.
 
 # License
 [Apache-License](./LICENSE)

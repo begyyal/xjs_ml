@@ -5,6 +5,7 @@
 !/src/test
 .ghtoken
 *.tgz
+.npmrc
 
 # Compiled output
 /dist
