@@ -7,5 +7,5 @@ currently this supports for modified KNN and naive bayes classifier.
 # License
 [Apache-License](./LICENSE)
 
-[npm-url]: https://npmjs.org/package/xjs-ml
-[npm-badge]: https://badgen.net/npm/v/xjs-ml
+[npm-url]: https://npmjs.org/package/@begyyal/xjs-ml
+[npm-badge]: https://badgen.net/npm/v/@begyyal/xjs-ml

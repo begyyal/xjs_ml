@@ -1,5 +1,5 @@
 {
-  "name": "xjs-ml",
+  "name": "@begyyal/xjs-ml",
   "version": "0.0.1",
   "description": "library modules for javascript that bundle simple machine-learning implementations.",
   "repository": {
@@ -46,5 +46,8 @@
   },
   "dependencies": {
     "xjs-common": "^13.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
