@@ -2,16 +2,17 @@ import { TimeUnit, toMsec, UArray } from "xjs-common";
 import { MlHelper } from "../func/ml-helper";
 
 type ValueWeight = Record<string, { id: number, timestamp?: number }[]>;
-type Model<Props extends Record<string, string | number>> = Record<keyof Props, ValueWeight>;
+export type NvcModel<Props extends Record<string, string | number>> = Record<keyof Props, ValueWeight>;
+export interface NvcDataset<Props extends Record<string, string | number>> { positive: NvcModel<Props>, negative: NvcModel<Props> }
 export class NvcScoringMachine<Props extends Record<string, string | number>> {
     private readonly _defaultScore: number;
     private readonly _remainingMsec: number;
     private readonly _trimmingScale: number;
     private _idCounter = 0;
-    private _positive: Model<Props> = {} as Model<Props>;
-    private _negative: Model<Props> = {} as Model<Props>;
+    private _positive: NvcModel<Props> = {} as NvcModel<Props>;
+    private _negative: NvcModel<Props> = {} as NvcModel<Props>;
     get models() { return { positive: this._positive, negative: this._negative }; }
-    set models(v: { positive: Model<Props>, negative: Model<Props> }) {
+    set models(v: NvcDataset<Props>) {
         this._positive = v.positive;
         this._negative = v.negative;
     }
@@ -32,7 +33,7 @@ export class NvcScoringMachine<Props extends Record<string, string | number>> {
         });
     }
     score(input: Props, thresholdTime: number = Date.now() - this._remainingMsec): number {
-        const aggregatePoints = (m: Model<Props>, featureKey: keyof Props, featureValue: string | number) =>
+        const aggregatePoints = (m: NvcModel<Props>, featureKey: keyof Props, featureValue: string | number) =>
             m[featureKey]?.[featureValue.toString()]
                 ?.map(({ timestamp: exp }) => !exp || exp < 0 ? 1 :
                     exp - thresholdTime <= 0 ? 0 : (exp - thresholdTime) / this._remainingMsec)
@@ -56,5 +57,10 @@ export class NvcScoringMachine<Props extends Record<string, string | number>> {
         [this._positive, this._negative]
             .flatMap(m => Object.values(m).flatMap((c2e: ValueWeight) => Object.values(c2e)))
             .forEach(exps => UArray.takeOut(exps, ({ id, timestamp: exp }) => exp > 0 && exp < now || id <= this._idCounter - this._trimmingScale));
+    }
+    static setTimestamp(dataset: NvcDataset<any>, ts?: number): void {
+        Object.values(dataset)
+            .flatMap(e => Object.values(e).flatMap(e2 => Object.values(e2)).flat())
+            .forEach(v => v.timestamp = ts);
     }
 }
