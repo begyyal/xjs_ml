@@ -58,9 +58,9 @@ export class NvcScoringMachine<Props extends Record<string, string | number>> {
             .flatMap(m => Object.values(m).flatMap((c2e: ValueWeight) => Object.values(c2e)))
             .forEach(exps => UArray.takeOut(exps, ({ id, timestamp: exp }) => exp > 0 && exp < now || id <= this._idCounter - this._trimmingScale));
     }
-    static setTimestamp(dataset: NvcDataset<any>, ts?: number): void {
+    static adjustTimestamp(dataset: NvcDataset<any>, converter: (original: number) => number): void {
         Object.values(dataset)
             .flatMap(e => Object.values(e).flatMap(e2 => Object.values(e2)).flat())
-            .forEach(v => v.timestamp = ts);
+            .forEach(v => v.timestamp = converter(v.timestamp));
     }
 }
