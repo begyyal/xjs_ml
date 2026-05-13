@@ -58,9 +58,15 @@ export class NvcScoringMachine<Props extends Record<string, string | number>> {
             .flatMap(m => Object.values(m).flatMap((c2e: ValueWeight) => Object.values(c2e)))
             .forEach(exps => UArray.takeOut(exps, ({ id, timestamp: exp }) => exp > 0 && exp < now || id <= this._idCounter - this._trimmingScale));
     }
-    static adjustTimestamp(dataset: NvcDataset<any>, converter: (original: number) => number): void {
+    static adjustTimestamp<P extends Record<string, string | number>>(dataset: NvcDataset<P>, converter: (original: number) => number): void {
         Object.values(dataset)
-            .flatMap(e => Object.values(e).flatMap(e2 => Object.values(e2)).flat())
-            .forEach(v => v.timestamp = converter(v.timestamp));
+            .flatMap((e: NvcModel<P>) => Object.values(e).flatMap(e2 => Object.values(e2)).flat())
+            .filter(v => v.timestamp).forEach(v => v.timestamp = converter(v.timestamp));
+    }
+    static shiftTimestampToNow<P extends Record<string, string | number>>(dataset: NvcDataset<P>): void {
+        const latestTs = Object.values(dataset)
+            .flatMap((e: NvcModel<P>) => Object.values(e).flatMap(e2 => Object.values(e2)).flat())
+            .map(w => w.timestamp).filter(ts => ts).sort((a, b) => b - a)[0], now = Date.now();
+        if (latestTs) NvcScoringMachine.adjustTimestamp(dataset, ts => ts + now - latestTs);
     }
 }
