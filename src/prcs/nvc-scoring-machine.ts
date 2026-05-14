@@ -1,46 +1,46 @@
-import { TimeUnit, toMsec, UArray } from "xjs-common";
+import { Array2, TimeUnit, toMsec, UArray } from "xjs-common";
 import { MlHelper } from "../func/ml-helper";
 
 type ValueWeight = Record<string, { id: number, timestamp?: number }[]>;
 export type NvcModel<Props extends Record<string, string | number>> = Record<keyof Props, ValueWeight>;
-export interface NvcDataset<Props extends Record<string, string | number>> { positive: NvcModel<Props>, negative: NvcModel<Props> }
-export class NvcScoringMachine<Props extends Record<string, string | number>> {
+export type NvcDataset<Cls extends string, Props extends Record<string, string | number>> = Record<Cls, NvcModel<Props>>;
+export class NvcScoringMachine<Cls extends string, Props extends Record<string, string | number>> {
     private readonly _remainingMsec: number;
     private readonly _trimmingScale: number;
     private _idCounter = 0;
-    private _positive: NvcModel<Props> = {} as NvcModel<Props>;
-    private _negative: NvcModel<Props> = {} as NvcModel<Props>;
-    get models() { return { positive: this._positive, negative: this._negative }; }
-    set models(v: NvcDataset<Props>) {
-        this._positive = v.positive;
-        this._negative = v.negative;
-    }
+    private _dataset = {} as NvcDataset<Cls, Props>;
     constructor(op?: { remainingMsec?: number, trimmingScale?: number }) {
         this._remainingMsec = MlHelper.checkNumericArgument(op?.remainingMsec, 0, null, { includeLower: false, d: toMsec(1, TimeUnit.Day) });
         this._trimmingScale = MlHelper.checkNumericArgument(op?.trimmingScale, 1, null, { d: 10000 });
     }
-    train(r: { props: Props, isPositive: boolean, timestamp?: number }): void {
-        const model = r.isPositive ? this._positive : this._negative;
+    train(r: { props: Props, cls: Cls, timestamp?: number }): void {
+        const model = this._dataset[r.cls];
         Object.entries(r.props).forEach(e => {
             (model as any)[e[0]] ??= {}; // typescript is broken.
             (model[e[0]][e[1].toString()] ??= []).push({ id: ++this._idCounter, timestamp: r.timestamp ?? -1 })
         });
     }
-    score(input: Props, thresholdTime: number = Date.now() - this._remainingMsec): number {
-        const aggregatePoints = (m: NvcModel<Props>, featureKey: keyof Props, featureValue: string | number) =>
-            m[featureKey]?.[featureValue.toString()]
-                ?.map(({ timestamp: exp }) => !exp || exp < 0 ? 1 :
-                    exp - thresholdTime <= 0 ? 0 : (exp - thresholdTime) / this._remainingMsec)
-                ?.reduce((a, b) => a + b) ?? 0;
-        const calcP = (k: keyof Props, v: string | number) => {
-            const pp = aggregatePoints(this._positive, k, v);
-            const np = aggregatePoints(this._negative, k, v);
-            return pp === 0 && np === 0 ? null : pp / (pp + np);
-        }
-        const pset = Object.entries(input).map(e => calcP(e[0], e[1]?.toString()));
-        if (pset.every(p => p === null)) return 0;
-        const unknownCount = pset.filter(p => p === null).length;
-        return (unknownCount === 0 ? pset : [(pset.length - unknownCount) / pset.length, ...pset.filter(p => p != null)]).reduce((a, b) => a * b);
+    /**
+     * consider any class that doesn't exist as "0".
+     */
+    score(input: Props, thresholdTime: number = Date.now() - this._remainingMsec): Partial<Record<Cls, number>> {
+        const classes = Object.keys(this._dataset) as Cls[];
+        if (classes.length === 0) return {};
+        const weight2point = (w: { id: number, timestamp?: number }[] = []) =>
+            w.map(({ timestamp: exp }) => !exp || exp < 0 ? 1 :
+                exp - thresholdTime <= 0 ? 0 : (exp - thresholdTime) / this._remainingMsec).reduce((a, b) => a + b, 0);
+        const entries = Object.entries(input);
+        const sumCount = (m: NvcModel<Props>) => m[entries[0][0]] ? weight2point(Object.values(m[entries[0][0]]).flat()) : 0;
+        const countSet = Array2.record(classes, { vgen: k => sumCount(this._dataset[k]) });
+        const totalCount = Array2.sum(Object.values(countSet));
+        const calcP = (m: NvcModel<Props>, count: number) =>
+            count === 0 ? 0 : entries.map(e => {
+                const num = weight2point(m[e[0]][e[1].toString()])
+                return (num + 1) / (count + classes.length);
+            }).reduce((a, b) => a * b) * count / totalCount;
+        const pSet = Array2.record(classes, { vgen: k => calcP(this._dataset[k], countSet[k]) });
+        const denom = Array2.sum(Object.values(pSet));
+        return Array2.record(classes, { vgen: k => pSet[k] === 0 ? 0 : pSet[k] / denom });
     }
     rank(valueSet: Record<keyof Props, (string | number)[]>): [number, Props][] {
         const entries = Object.entries(valueSet), thresholdTime = Date.now() - this._remainingMsec;
@@ -50,19 +50,19 @@ export class NvcScoringMachine<Props extends Record<string, string | number>> {
     }
     flush(): void {
         const now = Date.now();
-        [this._positive, this._negative]
+        Object.values(this._dataset)
             .flatMap(m => Object.values(m).flatMap((c2e: ValueWeight) => Object.values(c2e)))
             .forEach(exps => UArray.takeOut(exps, ({ id, timestamp: exp }) => exp > 0 && exp < now || id <= this._idCounter - this._trimmingScale));
     }
-    static adjustTimestamp<P extends Record<string, string | number>>(dataset: NvcDataset<P>, converter: (original: number) => number): void {
+    static adjustTimestamp<Cls extends string, P extends Record<string, string | number>>(dataset: NvcDataset<Cls, P>, converter: (original: number) => number): void {
         Object.values(dataset)
             .flatMap((e: NvcModel<P>) => Object.values(e).flatMap(e2 => Object.values(e2)).flat())
             .filter(v => v.timestamp).forEach(v => v.timestamp = converter(v.timestamp));
     }
-    static shiftTimestampToNow<P extends Record<string, string | number>>(dataset: NvcDataset<P>): void {
+    static shiftTimestampToNow<Cls extends string, P extends Record<string, string | number>>(dataset: NvcDataset<Cls, P>): void {
         const latestTs = Object.values(dataset)
             .flatMap((e: NvcModel<P>) => Object.values(e).flatMap(e2 => Object.values(e2)).flat())
-            .map(w => w.timestamp).filter(ts => ts).sort((a, b) => b - a)[0], now = Date.now();
+            .map(v => v.timestamp).filter(ts => ts).sort((a, b) => b - a)[0], now = Date.now();
         if (latestTs) NvcScoringMachine.adjustTimestamp(dataset, ts => ts + now - latestTs);
     }
 }
