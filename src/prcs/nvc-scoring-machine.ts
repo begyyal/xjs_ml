@@ -23,30 +23,39 @@ export class NvcScoringMachine<Cls extends string, Props extends Record<string, 
     /**
      * consider any class that doesn't exist as "0".
      */
-    score(input: Props, thresholdTime: number = Date.now() - this._remainingMsec): Partial<Record<Cls, number>> {
-        const classes = Object.keys(this._dataset) as Cls[];
-        if (classes.length === 0) return {};
+    score(input: Props, op?: { thresholdTime?: number, target?: "probability" | "likelihood", cls?: Cls[] }): Partial<Record<Cls, number>> {
+        const _thresholdTime = op?.thresholdTime ?? Date.now() - this._remainingMsec;
+        const _target = op?.target ?? "probability";
+        const _classes = op?.cls ?? Object.keys(this._dataset) as Cls[];
+        if (_classes.length === 0) return {};
         const weight2point = (w: { id: number, timestamp?: number }[] = []) =>
             w.map(({ timestamp: exp }) => !exp || exp < 0 ? 1 :
-                exp - thresholdTime <= 0 ? 0 : (exp - thresholdTime) / this._remainingMsec).reduce((a, b) => a + b, 0);
+                exp - _thresholdTime <= 0 ? 0 : (exp - _thresholdTime) / this._remainingMsec).reduce((a, b) => a + b, 0);
         const entries = Object.entries(input);
         const sumCount = (m: NvcModel<Props>) => m[entries[0][0]] ? weight2point(Object.values(m[entries[0][0]]).flat()) : 0;
-        const countSet = Array2.record(classes, { vgen: k => sumCount(this._dataset[k]) });
-        const totalCount = Array2.sum(Object.values(countSet));
-        const calcP = (m: NvcModel<Props>, count: number) =>
+        const countSet = Array2.record(_classes, { vgen: k => sumCount(this._dataset[k]) });
+        const calcL = (m: NvcModel<Props>, count: number) =>
             count === 0 ? 0 : entries.map(e => {
                 const num = weight2point(m[e[0]][e[1].toString()])
-                return (num + 1) / (count + classes.length);
-            }).reduce((a, b) => a * b) * count / totalCount;
-        const pSet = Array2.record(classes, { vgen: k => calcP(this._dataset[k], countSet[k]) });
+                return (num + 1) / (count + entries.length);
+            }).reduce((a, b) => a * b);
+        if (_target === "likelihood") return Array2.record(_classes, { vgen: k => calcL(this._dataset[k], countSet[k]) })
+        const totalCount = Array2.sum(Object.values(countSet));
+        const calcP = (m: NvcModel<Props>, count: number) => {
+            const l = calcL(m, count);
+            return l === 0 ? 0 : l * count / totalCount;
+        }
+        const pSet = Array2.record(_classes, { vgen: k => calcP(this._dataset[k], countSet[k]) });
         const denom = Array2.sum(Object.values(pSet));
-        return Array2.record(classes, { vgen: k => pSet[k] === 0 ? 0 : pSet[k] / denom });
+        return Array2.record(_classes, { vgen: k => pSet[k] === 0 ? 0 : pSet[k] / denom });
     }
-    rank(valueSet: Record<keyof Props, (string | number)[]>): [number, Props][] {
+    rank(valueSet: Record<keyof Props, (string | number)[]>, expected: Cls): [number, Props][] {
         const entries = Object.entries(valueSet), thresholdTime = Date.now() - this._remainingMsec;
         const expand2combinations: (i: number, o?: Props) => Props[] = (i, o = {} as Props) =>
             i === entries.length ? [o] : entries[i][1].flatMap(v => expand2combinations(i + 1, { ...o, [entries[i][0]]: v }));
-        return expand2combinations(0).map(p => [this.score(p, thresholdTime), p] as [number, Props]).sort((a, b) => a[0] - b[0]);
+        return expand2combinations(0)
+            .map(p => [this.score(p, { thresholdTime, target: "likelihood", cls: [expected] })[expected] ?? 0, p] as [number, Props])
+            .sort((a, b) => b[0] - a[0]);
     }
     flush(): void {
         const now = Date.now();
