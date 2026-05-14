@@ -5,7 +5,6 @@ type ValueWeight = Record<string, { id: number, timestamp?: number }[]>;
 export type NvcModel<Props extends Record<string, string | number>> = Record<keyof Props, ValueWeight>;
 export interface NvcDataset<Props extends Record<string, string | number>> { positive: NvcModel<Props>, negative: NvcModel<Props> }
 export class NvcScoringMachine<Props extends Record<string, string | number>> {
-    private readonly _defaultScore: number;
     private readonly _remainingMsec: number;
     private readonly _trimmingScale: number;
     private _idCounter = 0;
@@ -16,12 +15,7 @@ export class NvcScoringMachine<Props extends Record<string, string | number>> {
         this._positive = v.positive;
         this._negative = v.negative;
     }
-    constructor(op?: {
-        defaultScore?: number,
-        remainingMsec?: number,
-        trimmingScale?: number
-    }) {
-        this._defaultScore = MlHelper.checkNumericArgument(op?.defaultScore, 0, 1, { includeUpper: true, d: 0 });
+    constructor(op?: { remainingMsec?: number, trimmingScale?: number }) {
         this._remainingMsec = MlHelper.checkNumericArgument(op?.remainingMsec, 0, null, { includeLower: false, d: toMsec(1, TimeUnit.Day) });
         this._trimmingScale = MlHelper.checkNumericArgument(op?.trimmingScale, 1, null, { d: 10000 });
     }
@@ -44,7 +38,9 @@ export class NvcScoringMachine<Props extends Record<string, string | number>> {
             return pp === 0 && np === 0 ? null : pp / (pp + np);
         }
         const pset = Object.entries(input).map(e => calcP(e[0], e[1]?.toString()));
-        return pset.every(p => p === null) ? this._defaultScore : pset.map(p => p ?? 1).reduce((a, b) => a * b);
+        if (pset.every(p => p === null)) return 0;
+        const unknownCount = pset.filter(p => p === null).length;
+        return (unknownCount === 0 ? pset : [(pset.length - unknownCount) / pset.length, ...pset.filter(p => p != null)]).reduce((a, b) => a * b);
     }
     rank(valueSet: Record<keyof Props, (string | number)[]>): [number, Props][] {
         const entries = Object.entries(valueSet), thresholdTime = Date.now() - this._remainingMsec;
