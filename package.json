@@ -1,6 +1,6 @@
 {
   "name": "@begyyal/xjs-ml",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "library modules for javascript that bundle simple machine-learning implementations.",
   "repository": {
     "type": "git",
