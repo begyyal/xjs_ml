@@ -32,10 +32,10 @@ export class NvcScoringMachine<Cls extends string, Props extends Record<string, 
             w.map(({ timestamp: exp }) => !exp || exp < 0 ? 1 :
                 exp - _thresholdTime <= 0 ? 0 : (exp - _thresholdTime) / this._remainingMsec).reduce((a, b) => a + b, 0);
         const entries = Object.entries(input);
-        const sumCount = (m: NvcModel<Props>) => m[entries[0][0]] ? weight2point(Object.values(m[entries[0][0]]).flat()) : 0;
+        const sumCount = (m: NvcModel<Props>) => m?.[entries[0][0]] ? weight2point(Object.values(m[entries[0][0]]).flat()) : 0;
         const countSet = Array2.record(_classes, { vgen: k => sumCount(this._dataset[k]) });
         const calcL = (m: NvcModel<Props>, count: number) =>
-            count === 0 ? 0 : entries.map(e => {
+            !m || count === 0 ? 0 : entries.map(e => {
                 const num = weight2point(m[e[0]][e[1].toString()])
                 return (num + 1) / (count + entries.length);
             }).reduce((a, b) => a * b);
