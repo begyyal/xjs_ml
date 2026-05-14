@@ -20,7 +20,7 @@ export class NvcScoringMachine<Cls extends string, Props extends Record<string, 
         this._trimmingScale = MlHelper.checkNumericArgument(op?.trimmingScale, 1, null, { d: 10000 });
     }
     train(r: { props: Props, cls: Cls, timestamp?: number }): void {
-        const model = this._dataset[r.cls];
+        const model = ((this._dataset[r.cls] as any) ??= {}) as NvcModel<Props>;
         Object.entries(r.props).forEach(e => {
             (model as any)[e[0]] ??= {}; // typescript is broken.
             (model[e[0]][e[1].toString()] ??= []).push({ id: ++this._idCounter, timestamp: r.timestamp ?? -1 })
