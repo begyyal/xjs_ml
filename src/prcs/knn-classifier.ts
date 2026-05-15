@@ -44,13 +44,13 @@ export class KnnClassifier<Cls extends string, Props extends Record<string, numb
         this._defaultCls = op?.defaultCls;
     }
     setData(r: { props: Props, cls: Cls }): void {
-        this._dataSet.push([r.cls, this.applyCoef2props(r.props)]);
+        this._dataSet.push([r.cls, r.props]);
         if (this._dataSet.length > this._trimmingScale) this._dataSet.shift();
     }
     classify(props: Props): Cls {
         if (this._dataSet.length === 0) return this.defaultCls;
         const propsModified = this.applyCoef2props(props);
-        const dataInK = this._dataSet.map(tpl => [tpl[0], MlHelper.calcDistance(propsModified, tpl[1])] as [Cls, number])
+        const dataInK = this._dataSet.map(tpl => [tpl[0], MlHelper.calcDistance(propsModified, this.applyCoef2props(tpl[1]))] as [Cls, number])
             .sort((a, b) => a[1] - b[1]).slice(0, this.k);
         const farthest = dataInK.at(-1)[1];
         return Array.from(Array2.map(dataInK, d => d[0]).entries())
