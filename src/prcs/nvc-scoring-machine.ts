@@ -35,8 +35,8 @@ export class NvcScoringMachine<Cls extends string, Props extends Record<string, 
         const _classes = op?.cls ?? Object.keys(this._dataset) as Cls[];
         if (_classes.length === 0) return {};
         const weight2point = (w: { id: number, timestamp?: number }[] = []) =>
-            w.map(({ timestamp: exp }) => !exp || exp < 0 ? 1 :
-                exp - _thresholdTime <= 0 ? 0 : (exp - _thresholdTime) / this._remainingMsec).reduce((a, b) => a + b, 0);
+            w.map(({ timestamp }) => !timestamp || timestamp < 0 ? 1 :
+                timestamp - _thresholdTime <= 0 ? 0 : (timestamp - _thresholdTime) / this._remainingMsec).reduce((a, b) => a + b, 0);
         const entries = Object.entries(input);
         const sumCount = (m: NvcModel<Props>) => m?.[entries[0][0]] ? weight2point(Object.values(m[entries[0][0]]).flat()) : 0;
         const countSet = Array2.record(_classes, { vgen: k => sumCount(this._dataset[k]) });
@@ -63,11 +63,11 @@ export class NvcScoringMachine<Cls extends string, Props extends Record<string, 
             .map(p => [this.score(p, { thresholdTime, target: "likelihood", cls: [expected] })[expected] ?? 0, p] as [number, Props])
             .sort((a, b) => b[0] - a[0]);
     }
-    flush(): void {
-        const now = Date.now();
+    flush(op?: { thresholdTime?: number }): void {
+        const _thresholdTime = op?.thresholdTime ?? Date.now() - this._remainingMsec;
         Object.values(this._dataset)
             .flatMap(m => Object.values(m).flatMap((c2e: ValueWeight) => Object.values(c2e)))
-            .forEach(exps => UArray.takeOut(exps, ({ id, timestamp: exp }) => exp > 0 && exp < now || id <= this._idCounter - this._trimmingScale));
+            .forEach(exps => UArray.takeOut(exps, ({ id, timestamp }) => timestamp > 0 && timestamp < _thresholdTime || id <= this._idCounter - this._trimmingScale));
     }
     static adjustTimestamp<Cls extends string, P extends Record<string, string | number>>(dataset: NvcDataset<Cls, P>, converter: (original: number) => number): void {
         NvcScoringMachine.flatDataset2points(dataset).filter(v => v.timestamp).forEach(v => v.timestamp = converter(v.timestamp));
